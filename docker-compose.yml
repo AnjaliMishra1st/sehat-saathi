@@ -1,0 +1,44 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: sehat
+      POSTGRES_PASSWORD: sehat_dev_password
+      POSTGRES_DB: sehat
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sehat"]
+      interval: 5s
+      retries: 10
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg2://sehat:sehat_dev_password@db:5432/sehat
+      GNANI_API_KEY: ${GNANI_API_KEY:-}
+      TZ_NAME: Asia/Kolkata
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  # Optional monitoring: docker compose --profile monitoring up
+  prometheus:
+    profiles: ["monitoring"]
+    image: prom/prometheus:latest
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+
+  grafana:
+    profiles: ["monitoring"]
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+
+volumes:
+  pgdata:

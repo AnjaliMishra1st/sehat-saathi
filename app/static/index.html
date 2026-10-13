@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sehat Saathi</title>
+<style>
+:root{
+  --bg:#eef2f1; --panel:#ffffff; --ink:#14262b; --muted:#5b6d70; --line:#d5dfdd;
+  --teal:#0f5c5c; --teal-soft:#dcebe9; --saffron:#c77a0a; --saffron-soft:#fbefd9;
+  --red:#a8261f; --red-soft:#fbe4e1; --green:#1f7a43; --green-soft:#ddf1e4;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "Noto Sans","Segoe UI",system-ui,sans-serif}
+header{background:var(--teal);color:#fff;padding:14px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+header h1{font-size:1.15rem;margin:0;font-weight:700}
+header span{opacity:.8;font-size:.9rem}
+header .spacer{flex:1}
+button{font:inherit;cursor:pointer;border-radius:6px;border:1px solid var(--teal);background:var(--teal);color:#fff;padding:6px 12px}
+button.ghost{background:transparent;color:var(--teal)}
+header button{background:#fff;color:var(--teal);border-color:#fff}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--saffron);outline-offset:2px}
+nav{display:flex;gap:4px;padding:12px 24px 0;flex-wrap:wrap}
+nav button{background:transparent;color:var(--ink);border:0;border-bottom:3px solid transparent;border-radius:0;padding:8px 14px}
+nav button[aria-selected=true]{border-bottom-color:var(--teal);font-weight:700;color:var(--teal)}
+main{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:20px;padding:16px 24px 40px;align-items:start}
+@media(max-width:980px){main{grid-template-columns:1fr}}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:16px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.stat b{font-size:1.6rem;display:block;line-height:1.1}
+.stat.alert b{color:var(--red)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin-bottom:14px}
+.card h2{font-size:1rem;margin:0 0 10px}
+table{border-collapse:collapse;width:100%}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-weight:600;color:var(--muted);font-size:.85rem}
+.pill{display:inline-block;border-radius:999px;padding:1px 10px;font-size:.82rem;font-weight:600}
+.pill.taken,.pill.ok{background:var(--green-soft);color:var(--green)}
+.pill.called,.pill.waiting,.pill.expiring{background:var(--saffron-soft);color:var(--saffron)}
+.pill.missed,.pill.escalated,.pill.expired,.pill.flag{background:var(--red-soft);color:var(--red)}
+.pill.done{background:#e6ecea;color:var(--muted)}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+input,select,textarea{font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:#fff;min-width:0}
+textarea{width:100%}
+.muted{color:var(--muted);font-size:.9rem}
+.bar{height:8px;border-radius:4px;background:var(--line);overflow:hidden;width:90px;display:inline-block;vertical-align:middle}
+.bar i{display:block;height:100%;background:var(--teal)}
+.dose{display:grid;grid-template-columns:auto 1fr;gap:4px 10px}
+/* the phone: shows what the patient hears */
+.phone{background:#10272a;color:#e8f1ef;border-radius:18px;padding:14px;position:sticky;top:12px}
+.phone h2{font-size:.95rem;margin:0 0 8px;color:#fff}
+.bubble{background:#1d3d40;border-radius:12px;padding:10px 12px;margin:8px 0;font-size:.95rem}
+.bubble.sms{background:#3a2f12}
+.bubble small{display:block;color:#9fc0bc;margin-bottom:4px}
+.phone button{background:#e8f1ef;color:#10272a;border-color:#e8f1ef;margin:4px 4px 0 0}
+.phone input{width:100%;background:#1d3d40;color:#fff;border-color:#2c5256;margin-top:6px}
+.hidden{display:none}
+.toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:8px;z-index:9}
+@media (prefers-reduced-motion:no-preference){.toast{transition:opacity .2s}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Sehat Saathi</h1><span>Hospital and chemist desk</span><span id="voiceBadge" class="pill" style="background:#ffffff33;color:#fff">Voice: checking</span><span class="spacer"></span>
+  <button id="seed">Load demo data</button>
+  <button id="tickBtn" title="Move the demo clock 11 minutes ahead each press: 1st press retries unanswered calls, 2nd press alerts family">Skip 11 min</button>
+</header>
+<nav role="tablist" id="tabs">
+  <button role="tab" data-t="patients" aria-selected="true">Patients</button>
+  <button role="tab" data-t="reminders" aria-selected="false">Today's reminders</button>
+  <button role="tab" data-t="consult" aria-selected="false">Doctor ki baat</button>
+  <button role="tab" data-t="summary" aria-selected="false">Visit summary</button>
+  <button role="tab" data-t="queue" aria-selected="false">OPD queue</button>
+  <button role="tab" data-t="stock" aria-selected="false">Medicine stock</button>
+</nav>
+<main>
+<section>
+  <div class="stats" id="stats"></div>
+
+  <div id="t-patients">
+    <div class="card"><h2>Patients and medicines</h2><div id="patients" class="muted">Loading</div></div>
+    <div class="card"><h2>Add patient</h2>
+      <div class="row">
+        <input id="pn" placeholder="Name"><input id="pp" placeholder="Phone">
+        <select id="pl"><option value="hi">Hindi</option><option value="pa">Punjabi</option><option value="en">English</option></select>
+        <input id="pfn" placeholder="Family contact name"><input id="pfp" placeholder="Family phone">
+        <button id="addPat">Save patient</button>
+      </div>
+    </div>
+    <div class="card"><h2>Add BP / sugar check reminder</h2>
+      <p class="muted">System phone karke kehta hai "abhi sugar ya BP check karo aur number batao." Reading save hoti hai, limit se bahar ho to doctor ke liye flag lagta hai.</p>
+      <div class="row"><select id="kp"></select><select id="kk"><option value="sugar">Sugar</option><option value="bp">BP</option></select><input id="kt" placeholder="Times: 07:30, 19:30"><button id="addChk">Save check</button></div>
+    </div>
+    <div class="card"><h2>Add medicine</h2>
+      <p class="muted">A schedule starts sending reminders only after a doctor or pharmacist confirms it.</p>
+      <div class="row">
+        <select id="mp"></select><input id="mn" placeholder="Medicine"><input id="md" placeholder="Dose, e.g. 5 mg" size="10">
+        <input id="mt" placeholder="Times: 08:00, 21:00"><select id="mf"><option value="">Food: any</option><option value="before">Before food</option><option value="after">After food</option></select>
+        <button id="addMed">Save medicine</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="t-reminders" class="hidden"><div class="card"><h2>Reminders</h2><div id="reminders" class="muted">Loading</div></div></div>
+
+  <div id="t-consult" class="hidden">
+    <div class="card"><h2>Doctor ki baat: bol do, schedule ban jaayega</h2>
+      <p class="muted">Doctor dawai ki list bolta hai (ya patient ke saath consult). Yahan voice text ban kar schedule ka <b>draft</b> banta hai. Doctor check karke confirm kare, tabhi reminders shuru hote hain.</p>
+      <div class="row"><select id="cp"></select></div>
+      <textarea id="ct" rows="4" placeholder="Amlodipine 5 mg subah ek goli khane ke baad. Metformin 500 mg subah shaam do baar khane ke baad. Paracetamol bukhar mein zaroorat par."></textarea>
+      <div class="row"><button id="mkCons">Make schedule draft</button><button class="ghost" id="micC">Speak instead</button><button class="ghost" id="exC">Fill example</button></div>
+      <div id="consOut"></div>
+    </div>
+  </div>
+
+  <div id="t-summary" class="hidden">
+    <div class="card"><h2>Patient's own words before the visit</h2>
+      <p class="muted">The patient (or a helper) says what has been happening at home. The doctor gets a one-page view through a QR code.</p>
+      <div class="row"><select id="sp"></select></div>
+      <textarea id="st" rows="4" placeholder="e.g. 3 din se sar dard hai, raat ko neend nahi aati, sugar ki dawai khatam ho gayi"></textarea>
+      <div class="row"><button id="mkSum">Create summary</button><button class="ghost" id="mic">Speak instead</button></div>
+      <div id="sumOut"></div>
+    </div>
+    <div class="card"><h2>Record a reading</h2>
+      <div class="row"><select id="rp"></select><input id="rt" placeholder="sugar 180  or  bp 140/90" size="26"><button id="addRd">Save reading</button></div>
+      <div id="rdOut" class="muted"></div>
+    </div>
+  </div>
+
+  <div id="t-queue" class="hidden">
+    <div class="card"><h2>Aaj kitne token bache? (har hospital, har department)</h2>
+      <p class="muted">Hospital staff har department ki daily limit set karta hai. Mareez ghar baithe phone par poochh sakta hai, safar shuru karne se pehle.</p>
+      <div id="avail" class="muted">Loading</div>
+      <div class="row"><input id="dh" value="Civil Hospital Demo" placeholder="Hospital"><input id="dn" value="Medicine OPD" placeholder="Department"><input id="dl" type="number" placeholder="Daily limit" style="width:120px"><button id="setLim">Set limit</button></div>
+    </div>
+    <div class="card"><h2>Token lena aur apna number dekhna</h2>
+      <div class="row"><input id="qh" value="Civil Hospital Demo" placeholder="Hospital"><input id="qd" value="Medicine OPD" placeholder="Department"><input id="qn" placeholder="Patient name"><input id="qph" placeholder="Phone (call jab number paas aaye)"><select id="ql"><option value="hi">Hindi</option><option value="pa">Punjabi</option><option value="en">English</option></select><button id="addQ">Take token</button><button class="ghost" id="nextQ">Call next</button></div>
+      <div class="row"><input id="chkTok" type="number" placeholder="Token number" style="width:150px"><button class="ghost" id="chkAhead">Mere aage kitne?</button><span id="aheadOut" class="muted"></span></div>
+      <p class="muted">Jab aapke aage <b>10 ya kam</b> log bachte hain, phone par "number paas hai" call jaati hai. Demo: token lo, <b>Call next</b> kai baar dabao, phir upar <b>Skip 11 min</b> dabao.</p>
+      <div id="queue"></div></div></div>
+
+  <div id="t-stock" class="hidden"><div class="card"><h2>Medicine stock and expiry</h2>
+    <div class="row"><input id="sn" placeholder="Medicine"><input id="sb" placeholder="Batch" size="10"><input id="se" type="date"><input id="sq" type="number" placeholder="Qty" style="width:90px"><button id="addS">Add stock</button></div>
+    <div id="stock"></div></div></div>
+</section>
+
+<aside class="phone" aria-label="Patient phone">
+  <h2>Patient phone (what goes out)</h2>
+  <div id="calls" class="muted" style="color:#9fc0bc">No calls yet</div>
+  <div class="row"><button id="speakLast">Hear latest call</button></div>
+  <div id="replyBox" class="hidden">
+    <div class="muted" style="color:#9fc0bc">Reply as the patient:</div>
+    <button data-r="haan li">Haan, li</button><button data-r="nahi li">Nahi li</button><button data-r="haan li, sugar 280">Li + sugar 280</button><button data-r="sugar 140">Sugar 140</button><button data-r="bp 150/95">BP 150/95</button>
+    <button id="voiceReply">Reply with voice</button><input id="replyTxt" placeholder="or type a reply, then Enter">
+  </div>
+</aside>
+</main>
+<div id="toast" class="toast hidden" role="status"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = t => String(t ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let patients = [], lastReminder = null, lastCall = null;
+
+async function api(path, method="GET", body){
+  const r = await fetch(path, {method, headers:{"Content-Type":"application/json"}, body: body ? JSON.stringify(body) : undefined});
+  const data = await r.json().catch(()=>({}));
+  if(!r.ok){ const d = data.detail; throw new Error(typeof d === "string" ? d : JSON.stringify(d)); }
+  return data;
+}
+function toast(msg){ const t=$("#toast"); t.textContent=msg; t.classList.remove("hidden"); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.add("hidden"),2800); }
+const guard = fn => async (...a) => { try{ await fn(...a); }catch(e){ toast(e.message); } };
+
+// ---- tabs
+document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("#tabs button").forEach(x => x.setAttribute("aria-selected", x===b));
+  ["patients","reminders","consult","summary","queue","stock"].forEach(t => $("#t-"+t).classList.toggle("hidden", t!==b.dataset.t));
+});
+
+// ---- render
+async function loadStats(){
+  const d = await api("/api/dashboard");
+  $("#stats").innerHTML = [
+    ["Patients", d.patients, ""], ["Called today", d.today.called, ""], ["Medicine taken", d.today.taken, ""],
+    ["Missed", d.today.missed, d.today.missed ? "alert":""], ["Family alerted", d.today.escalated, d.today.escalated ? "alert":""],
+    ["Readings to review", d.flagged_readings, d.flagged_readings ? "alert":""], ["Stock expiring", d.expiring_stock, d.expiring_stock ? "alert":""],
+    ["Waiting in OPD", d.queue_waiting, ""]
+  ].map(([l,v,c]) => `<div class="stat ${c}"><b>${v}</b>${l}</div>`).join("");
+}
+async function loadPatients(){
+  patients = await api("/api/patients");
+  const opts = patients.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join("");
+  ["#mp","#sp","#rp","#cp","#kp"].forEach(s => { const v=$(s).value; $(s).innerHTML = opts; if(v) $(s).value=v; });
+  if(!patients.length){ $("#patients").textContent = "No patients yet. Add one below or press Load demo data."; return; }
+  $("#patients").innerHTML = patients.map(p => {
+    const a = p.adherence, pct = a.percent;
+    const meds = p.medicines.map(m => `<tr><td>${esc(m.name)} ${esc(m.dose)}</td><td>${m.times.join(", ")}</td><td>${esc(m.food||"")}</td>
+      <td>${m.confirmed_by ? `<span class="pill ok">Confirmed by ${esc(m.confirmed_by)}</span>` : `<button class="ghost" data-confirm="${m.id}">Confirm schedule</button>`}</td>
+      <td>${m.confirmed_by ? `<button class="ghost" data-trigger="${m.id}">Call now</button>` : ""}</td></tr>`).join("");
+    return `<div style="margin-bottom:16px"><b>${esc(p.name)}</b> <span class="muted">${p.age?p.age+" yrs, ":""}${p.language.toUpperCase()}, family: ${esc(p.family_name||"none")}</span>
+      ${pct===null?"":`<span style="margin-left:10px"><span class="bar"><i style="width:${pct}%"></i></span> ${pct}% taken (7 days)</span>`}
+      ${p.latest_flag?`<span class="pill flag" style="margin-left:8px">${esc(p.latest_flag)}</span>`:""}
+      <table><tr><th>Medicine</th><th>Times</th><th>Food</th><th>Schedule</th><th></th></tr>${meds||'<tr><td colspan=5 class="muted">No medicines</td></tr>'}</table>
+      ${(p.checks||[]).map(c => `<div style="margin-top:6px"><span class="pill called">${c.kind.toUpperCase()} check</span> at ${c.times.join(", ")} <button class="ghost" data-chk="${c.id}">Ask now</button></div>`).join("")}</div>`;
+  }).join("");
+  document.querySelectorAll("[data-confirm]").forEach(b => b.onclick = guard(async () => {
+    const by = prompt("Confirmed by (doctor or pharmacist name):"); if(!by) return;
+    await api(`/api/medicines/${b.dataset.confirm}/confirm`,"POST",{by}); toast("Schedule confirmed"); refresh();
+  }));
+  document.querySelectorAll("[data-chk]").forEach(b => b.onclick = guard(async () => {
+    lastReminder = await api("/api/checks/trigger","POST",{check_id:+b.dataset.chk}); toast("Reading requested"); refresh(); speakLatest();
+  }));
+  document.querySelectorAll("[data-trigger]").forEach(b => b.onclick = guard(async () => {
+    lastReminder = await api("/api/reminders/trigger","POST",{medicine_id:+b.dataset.trigger}); toast("Call placed"); refresh(); speakLatest();
+  }));
+}
+async function loadReminders(){
+  const rows = await api("/api/reminders");
+  const open = rows.find(r => r.status === "called"); lastReminder = open || null;
+  $("#replyBox").classList.toggle("hidden", !open);
+  $("#reminders").innerHTML = rows.length ? `<table><tr><th>Due</th><th>Patient</th><th>Medicine</th><th>Status</th><th>Reply</th></tr>` +
+    rows.map(r => `<tr><td>${r.due_at.replace("T"," ")}</td><td>${esc(r.patient)}</td><td>${esc(r.medicine)} ${esc(r.dose)}</td>
+    <td><span class="pill ${r.status}">${r.status}</span> <span class="muted">try ${r.attempts}</span></td><td>${esc(r.response_text||"")}</td></tr>`).join("") + "</table>"
+    : "No reminders yet. Press Call now on a confirmed medicine.";
+}
+async function loadCalls(){
+  const rows = await api("/api/calls"); lastCall = rows[0] || null;
+  $("#calls").innerHTML = rows.length ? rows.slice(0,6).map(c => `<div class="bubble ${c.channel}"><small>${c.channel==="sms"?"SMS to family":"Voice call"}: ${esc(c.patient||"")} (${c.language}) ${c.at.slice(11,16)}</small>${esc(c.text)}</div>`).join("") : "No calls yet";
+}
+async function loadQueue(){
+  const rows = await api("/api/queue");
+  $("#queue").innerHTML = rows.length ? `<table><tr><th>Hospital</th><th>Department</th><th>Token</th><th>Name</th><th>Status</th></tr>` +
+    rows.map(t => `<tr><td>${esc(t.hospital)}</td><td>${esc(t.department)}</td><td>${t.token_no}</td><td>${esc(t.name)}</td><td><span class="pill ${t.status}">${t.status}</span>${t.notified?' <span class="muted">called</span>':''}</td></tr>`).join("") + "</table>" : "<p class='muted'>Nobody on the list yet.</p>";
+}
+async function loadAvail(){
+  const rows = await api("/api/availability?lang=" + $("#ql").value);
+  window._avail = rows;
+  $("#avail").innerHTML = rows.length ? `<table><tr><th>Hospital</th><th>Department</th><th>Daily limit</th><th>Given today</th><th>Left</th><th></th></tr>` +
+    rows.map((a,i) => `<tr><td>${esc(a.hospital)}</td><td>${esc(a.department)}</td><td>${a.daily_limit}</td><td>${a.issued_today}</td>
+      <td><span class="pill ${a.full?"expired":a.left<=5?"expiring":"ok"}">${a.full?"FULL":a.left+" left"}</span></td>
+      <td><button class="ghost" data-say="${i}">Hear answer</button></td></tr>`).join("") + "</table>" : "<p class='muted'>No department limits set yet. Press Load demo data or set one below.</p>";
+  document.querySelectorAll("[data-say]").forEach(b => b.onclick = () => speak(window._avail[+b.dataset.say].say, $("#ql").value));
+}
+async function loadStock(){
+  const rows = await api("/api/stock");
+  $("#stock").innerHTML = rows.length ? `<table><tr><th>Medicine</th><th>Batch</th><th>Expiry</th><th>Qty</th><th>Status</th></tr>` +
+    rows.map(s => `<tr><td>${esc(s.name)}</td><td>${esc(s.batch||"")}</td><td>${s.expiry}</td><td>${s.qty}</td>
+    <td><span class="pill ${s.state}">${s.state==="expired"?"Expired":s.state==="expiring"?s.days_left+" days left":"OK"}</span></td></tr>`).join("") + "</table>" : "<p class='muted'>No stock entered yet.</p>";
+}
+const refresh = () => Promise.all([loadStats(), loadPatients(), loadReminders(), loadCalls(), loadQueue(), loadAvail(), loadStock()]).catch(e => toast(e.message));
+
+// ---- speech (browser Web Speech API: demo stand-in for Gnani TTS / STT)
+let voiceOn = false;
+function browserSpeak(text, lang){
+  if(!("speechSynthesis" in window)) return toast("This browser cannot speak");
+  const u = new SpeechSynthesisUtterance(text); u.lang = {hi:"hi-IN",pa:"pa-IN",en:"en-IN"}[lang] || "hi-IN";
+  speechSynthesis.cancel(); speechSynthesis.speak(u);
+}
+async function speak(text, lang){
+  if(voiceOn){
+    try{
+      const r = await fetch("/api/voice/tts",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text,lang})});
+      if(!r.ok){ const e = await r.json().catch(()=>({})); throw new Error(e.detail || "Gnani voice failed"); }
+      const url = URL.createObjectURL(await r.blob()); const a = new Audio(url); a.onended = () => URL.revokeObjectURL(url); await a.play(); return;
+    }catch(e){ toast("Gnani voice problem, using browser voice. " + e.message); }
+  }
+  browserSpeak(text, lang);
+}
+async function loadVoice(){
+  try{ voiceOn = (await api("/api/voice/status")).gnani; }catch(e){ voiceOn = false; }
+  const b = $("#voiceBadge"); b.textContent = voiceOn ? "Voice: Gnani ON" : "Voice: browser (no Gnani key)";
+}
+// ---- record microphone as WAV (Gnani accepts WAV, not browser webm)
+async function startWav(){
+  const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const src = ctx.createMediaStreamSource(stream), proc = ctx.createScriptProcessor(4096,1,1), mute = ctx.createGain();
+  const chunks = []; mute.gain.value = 0;
+  proc.onaudioprocess = e => chunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+  src.connect(proc); proc.connect(mute); mute.connect(ctx.destination);
+  const rate = ctx.sampleRate;
+  return { stop: async () => {
+    proc.disconnect(); src.disconnect(); stream.getTracks().forEach(t => t.stop()); await ctx.close();
+    const len = chunks.reduce((n,c) => n + c.length, 0), pcm = new Int16Array(len); let o = 0;
+    for(const c of chunks){ for(let i=0;i<c.length;i++){ const v = Math.max(-1, Math.min(1, c[i])); pcm[o++] = v < 0 ? v*0x8000 : v*0x7FFF; } }
+    const buf = new ArrayBuffer(44 + pcm.length*2), dv = new DataView(buf), w = (off,t) => [...t].forEach((ch,i) => dv.setUint8(off+i, ch.charCodeAt(0)));
+    w(0,"RIFF"); dv.setUint32(4, 36 + pcm.length*2, true); w(8,"WAVE"); w(12,"fmt "); dv.setUint32(16,16,true); dv.setUint16(20,1,true);
+    dv.setUint16(22,1,true); dv.setUint32(24,rate,true); dv.setUint32(28,rate*2,true); dv.setUint16(32,2,true); dv.setUint16(34,16,true);
+    w(36,"data"); dv.setUint32(40, pcm.length*2, true); new Int16Array(buf, 44).set(pcm);
+    return new Blob([buf], {type:"audio/wav"});
+  }};
+}
+function speakLatest(){ setTimeout(async () => { await loadCalls(); if(lastCall) speak(lastCall.text, lastCall.language); }, 400); }
+$("#speakLast").onclick = () => lastCall ? speak(lastCall.text, lastCall.language) : toast("No call to play yet");
+function listen(lang, cb){
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SR) return toast("Speech input needs Chrome or Edge. Type instead.");
+  const r = new SR(); r.lang = {hi:"hi-IN",pa:"pa-IN",en:"en-IN"}[lang] || "hi-IN"; r.onresult = e => cb(e.results[0][0].transcript); r.start();
+}
+
+// ---- actions
+async function reply(text){
+  if(!lastReminder) return toast("No open call to reply to");
+  const res = await api(`/api/reminders/${lastReminder.id}/response`,"POST",{text});
+  toast(res.understood ? "Reply: " + res.status : "Not understood. The system will ask again.");
+  $("#replyTxt").value = ""; refresh();
+}
+document.querySelectorAll("[data-r]").forEach(b => b.onclick = guard(() => reply(b.dataset.r)));
+$("#replyTxt").onkeydown = e => { if(e.key==="Enter" && e.target.value.trim()) guard(reply)(e.target.value.trim()); };
+
+$("#seed").onclick = guard(async () => { const r = await api("/api/demo/seed","POST"); toast(r.seeded ? "Dummy data loaded" : "Data already there"); refresh(); });
+let skipped = 0;  // demo clock: each press moves "now" 11 minutes further ahead
+$("#tickBtn").onclick = guard(async () => { skipped += 11; const r = await api("/api/scheduler/tick","POST",{advance_minutes:skipped}); toast(`Retried ${r.retried}, family alerted ${r.escalated}`); refresh(); });
+$("#addPat").onclick = guard(async () => {
+  await api("/api/patients","POST",{name:$("#pn").value, phone:$("#pp").value, language:$("#pl").value, family_name:$("#pfn").value||null, family_phone:$("#pfp").value||null});
+  ["#pn","#pp","#pfn","#pfp"].forEach(s => $(s).value=""); toast("Patient saved"); refresh();
+});
+$("#addMed").onclick = guard(async () => {
+  await api(`/api/patients/${$("#mp").value}/medicines`,"POST",{name:$("#mn").value, dose:$("#md").value||null, times:$("#mt").value.split(",").map(x=>x.trim()).filter(Boolean), food:$("#mf").value||null});
+  toast("Saved. Now confirm the schedule."); refresh();
+});
+$("#mkSum").onclick = guard(async () => {
+  const r = await api(`/api/patients/${$("#sp").value}/summary`,"POST",{text:$("#st").value});
+  $("#sumOut").innerHTML = `<div class="row" style="align-items:center"><img src="${r.qr}" alt="QR for doctor" width="130" height="130">
+    <div><b>Code ${esc(r.url.split("/").pop())}</b><br><a href="${r.url}" target="_blank" rel="noopener">Open doctor's one-page view</a>
+    <ul>${r.detected.map(d=>`<li>${esc(d)}</li>`).join("")||"<li class='muted'>No known symptoms detected; the doctor still sees the words.</li>"}</ul></div></div>`;
+});
+$("#mic").onclick = () => { const p = patients.find(x => x.id == $("#sp").value); listen(p ? p.language : "hi", t => $("#st").value = t); };
+$("#addRd").onclick = guard(async () => {
+  const r = await api(`/api/patients/${$("#rp").value}/readings`,"POST",{text:$("#rt").value});
+  $("#rdOut").innerHTML = r.map(x => `${x.kind} ${x.value1}${x.value2?"/"+x.value2:""} ${x.flag?`<span class="pill flag">${esc(x.reason)}. Show doctor.</span>`:'<span class="pill ok">in range</span>'}`).join("<br>");
+  $("#rt").value=""; refresh();
+});
+$("#addQ").onclick = guard(async () => {
+  const r = await api("/api/queue","POST",{name:$("#qn").value, hospital:$("#qh").value, department:$("#qd").value, phone:$("#qph").value||null, language:$("#ql").value});
+  $("#qn").value=""; $("#chkTok").value = r.token_no;
+  toast(`Token ${r.token_no}. ${r.ahead} people ahead.`); speak(r.say, $("#ql").value); refresh();
+});
+$("#nextQ").onclick = guard(async () => { const r = await api("/api/queue/next","POST",{hospital:$("#qh").value, department:$("#qd").value}); toast(r.called ? `Next: token ${r.called.token_no}, ${r.called.name}` : "Nobody waiting"); refresh(); });
+$("#chkAhead").onclick = guard(async () => {
+  const q = new URLSearchParams({token_no:$("#chkTok").value, hospital:$("#qh").value, department:$("#qd").value, lang:$("#ql").value});
+  const r = await api("/api/queue/status?" + q);
+  $("#aheadOut").textContent = r.say; speak(r.say, $("#ql").value);
+});
+$("#ql").onchange = loadAvail;
+$("#setLim").onclick = guard(async () => { await api("/api/departments","POST",{hospital:$("#dh").value, name:$("#dn").value, daily_limit:+$("#dl").value}); toast("Limit saved"); refresh(); });
+$("#addChk").onclick = guard(async () => {
+  await api(`/api/patients/${$("#kp").value}/checks`,"POST",{kind:$("#kk").value, times:$("#kt").value.split(",").map(x=>x.trim()).filter(Boolean)});
+  $("#kt").value=""; toast("Check reminder saved"); refresh();
+});
+$("#addS").onclick = guard(async () => {
+  await api("/api/stock","POST",{name:$("#sn").value, batch:$("#sb").value||null, expiry:$("#se").value, qty:+$("#sq").value||0});
+  ["#sn","#sb","#se","#sq"].forEach(s => $(s).value=""); refresh();
+});
+
+// ---- Doctor ki baat
+let drafts = [];
+function renderDrafts(){
+  $("#consOut").innerHTML = `<h2 style="margin-top:14px">Draft schedule (editable)</h2><table><tr><th>Heard</th><th>Medicine</th><th>Dose</th><th>Times (HH:MM, comma)</th><th>Food</th></tr>` +
+    drafts.map((d,i) => `<tr><td class="muted">${esc(d.heard)}${d.notes.map(n=>`<br><span class="pill called">${esc(n)}</span>`).join("")}</td>
+      <td><input data-i="${i}" data-f="name" value="${esc(d.name)}" size="12"></td>
+      <td><input data-i="${i}" data-f="dose" value="${esc(d.dose||"")}" size="7"></td>
+      <td>${d.as_needed ? '<span class="muted">only when needed, no reminders</span>' : `<input data-i="${i}" data-f="times" value="${d.times.join(", ")}" size="14">`}</td>
+      <td><select data-i="${i}" data-f="food"><option value="">any</option><option value="before" ${d.food==="before"?"selected":""}>before</option><option value="after" ${d.food==="after"?"selected":""}>after</option></select></td></tr>`).join("") +
+    `</table><div class="row"><input id="cby" placeholder="Doctor / pharmacist name"><button id="okCons">Confirm and start reminders</button></div>`;
+  document.querySelectorAll("#consOut [data-f]").forEach(el => el.onchange = () => {
+    const d = drafts[+el.dataset.i], f = el.dataset.f;
+    d[f] = f === "times" ? el.value.split(",").map(x=>x.trim()).filter(Boolean) : el.value || null;
+  });
+  $("#okCons").onclick = guard(async () => {
+    const by = $("#cby").value.trim(); if(!by) return toast("Enter the doctor's name to confirm");
+    const r = await api(`/api/patients/${$("#cp").value}/consult/confirm`,"POST",{by, items: drafts.map(d => ({name:d.name, dose:d.dose, times:d.times, food:d.food, as_needed:d.as_needed}))});
+    $("#consOut").innerHTML = `<p><span class="pill ok">Confirmed</span> ${r.created.length} medicine(s) scheduled. Open the Patients tab and press <b>Call now</b> to hear the first reminder.</p>`;
+    toast("Reminders are on"); refresh();
+  });
+}
+$("#mkCons").onclick = guard(async () => {
+  const r = await api(`/api/patients/${$("#cp").value}/consult`,"POST",{text:$("#ct").value});
+  drafts = r.drafts; renderDrafts();
+});
+$("#exC").onclick = () => $("#ct").value = "Amlodipine 5 mg subah ek goli khane ke baad. Metformin 500 mg subah shaam do baar khane ke baad. Pantoprazole khali pet subah. Paracetamol bukhar mein zaroorat par.";
+$("#micC").onclick = () => listen("hi", t => $("#ct").value = t);
+
+let rec = null;
+$("#voiceReply").onclick = guard(async () => {
+  if(!lastReminder) return toast("No open call to reply to");
+  if(!voiceOn){ return listen(lastReminder.language, t => guard(reply)(t)); }  // no Gnani key: browser speech recognition
+  const btn = $("#voiceReply");
+  if(!rec){
+    rec = await startWav(); btn.textContent = "Stop and send";
+    setTimeout(() => { if(rec) btn.click(); }, 10000);  // auto-stop after 10 s
+    return;
+  }
+  const r = rec; rec = null; btn.textContent = "Sending...";
+  const blob = await r.stop();
+  try{
+    const res = await fetch(`/api/reminders/${lastReminder.id}/voice-reply`, {method:"POST", headers:{"Content-Type":"audio/wav"}, body: blob});
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.detail || "Voice reply failed");
+    toast(data.transcript ? `Heard: "${data.transcript}" -> ${data.result.status}` : "Could not hear anything. Try again.");
+  } finally { btn.textContent = "Reply with voice"; }
+  refresh();
+});
+
+loadVoice(); refresh(); setInterval(refresh, 15000);
+</script>
+</body>
+</html>
