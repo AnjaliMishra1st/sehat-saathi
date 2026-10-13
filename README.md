@@ -1,82 +1,170 @@
-# Sehat Saathi (MVP)
+<div align="center">
 
-**Hospital se pehle, hospital mein, hospital ke baad.** Voice-first, apni bhasha mein, bina smartphone ke.
+# 🩺 Sehat Saathi
 
-**Problem:** door se aane wale mareez ko safar se pehle pata nahi hota ki aaj token milega ya nahi. Wo raat bhar line mein lagta hai aur subah wapas bhej diya jaata hai. Ghar par dawai, BP aur sugar ka hisaab bhi gadbad rehta hai.
+**A voice-first health helper for patients who travel far to reach a hospital.**
+Before the hospital. Inside the hospital. After the hospital.
 
-Ghar se doctor tak, dawai ka poora loop: **patient ki baat → doctor ka one-page summary → dawai reminder call → "li / nahi li" → family alert**, plus hospital name list aur medical shop expiry.
+[![CI](https://github.com/AnjaliMishra1st/sehat-saathi/actions/workflows/ci.yml/badge.svg)](https://github.com/AnjaliMishra1st/sehat-saathi/actions)
+![Python](https://img.shields.io/badge/Python-3.12-blue)
+![FastAPI](https://img.shields.io/badge/FastAPI-backend-009688)
+![Voice](https://img.shields.io/badge/Voice-Gnani%20Vachana-orange)
+![Tests](https://img.shields.io/badge/tests-19%20passing-brightgreen)
 
-## Quick start
+</div>
 
-**Option A: Docker (recommended, Postgres included)**
+---
+
+## The Problem
+
+Many patients travel a long way to big government hospitals like AIIMS. They stand in line, sometimes all night. In the morning they learn that the daily token limit is over, and they are sent home without a checkup.
+
+After the visit there is a second problem. At home, patients forget medicines, and nobody tracks their BP or sugar.
+
+Both problems hurt the same person, so Sehat Saathi solves them together.
+
+## The Solution
+
+Sehat Saathi works through **voice**, in the patient's own language. It does not need a smartphone app.
+
+| Stage | What the patient or family gets |
+|---|---|
+| **Before the hospital** | Ask by voice: *"How many tokens are left in Medicine OPD today?"* and know before travelling. |
+| **In the hospital** | Ask: *"How many people are ahead of me?"* The system calls when the turn is near, so the patient can rest instead of standing in line. |
+| **For the doctor** | A one-page summary of the patient's words, medicines and readings, opened by QR code. |
+| **After the hospital** | Medicine reminder calls, a simple "taken / not taken" reply, and an SMS to the family if there is no reply. |
+
+## Features
+
+- **OPD queue**: daily token limit per department, tokens left, people ahead, and a "your number is near" call (10 or fewer ahead).
+- **Visit summary**: the patient's own words become a one-page doctor view with a QR code.
+- **Medicine reminders**: voice call, then reply, then retry, then SMS to family.
+- **Understands many ways of replying**: Hindi, Hinglish, Punjabi and English ("haan", "nahi", "li").
+- **BP and sugar readings**: understood from speech or text (for example "sugar 280" or "bp 150/95"). Readings outside the range are flagged for the doctor.
+- **Scheduled health checks**: calls that ask the patient to check now and say the number.
+- **Chemist stock**: batch and expiry tracking, with expired and expiring-in-60-days status.
+- **DevOps ready**: Docker, Postgres, health check, `/metrics`, GitHub Actions CI and automated tests.
+
+## Voice Technology (Gnani)
+
+Sehat Saathi uses Gnani's **Vachana** speech APIs ([docs](https://docs.gnani.ai)):
+
+- **Text-to-speech (Timbre v2.5):** reminders, queue answers and token availability are spoken in Hindi, Punjabi or English.
+- **Speech-to-text (Prisma):** the patient's spoken reply or reading is turned into text, and then the normal reminder logic runs.
+
+If no API key is set, the dashboard uses the browser's built-in voice, so the demo still works.
+
+## Quick Start
+
+### Option A: Docker (recommended, includes Postgres)
+
 ```bash
 docker compose up --build
-# open http://localhost:8000
 ```
 
-**Option B: local Python (SQLite)**
+Open <http://localhost:8000>
+
+### Option B: Local Python (uses SQLite)
+
 ```bash
+python -m venv venv
+source venv/Scripts/activate        # Windows Git Bash
+# source venv/bin/activate          # Mac / Linux
 pip install -r requirements.txt
 uvicorn app.main:app --reload
-# open http://localhost:8000
 ```
-Tests: `python -m pytest -q`
 
-Optional monitoring: `docker compose --profile monitoring up` (Prometheus :9090, Grafana :3000, scrape `/metrics`).
+Open <http://localhost:8000>
 
-## What is in the MVP
+### Turn on real Gnani voice
 
-| Module | What works |
-|---|---|
-| Visit summary | Patient's words → symptoms picked out (rule-based) → QR + one-page doctor view with medicines, readings, adherence |
-| Medicines | Schedule per patient; **reminders start only after a doctor/pharmacist confirms** |
-| Reminder loop | Due time → voice call → "haan/nahi" (Hindi, Hinglish, Punjabi, English) → retry → SMS to family |
-| Sugar / BP | Parsed from speech/text ("sugar 280", "bp 150/95"), flagged for the doctor |
-| Queue (any hospital) | Daily token limit per department, **"aaj kitne token bache?"** (voice answer, before travelling), "mere aage kitne log?", and a **call when the turn is near** (10 or fewer ahead) |
-| BP / sugar checks | Scheduled "check now and tell me the number" calls; bare numbers ("140") understood; out-of-range readings flagged for the doctor; family alerted if no reply |
-| Chemist stock | Batch + expiry, expired / expiring-in-60-days status |
-| DevOps | Docker, Postgres, health check, `/metrics`, GitHub Actions CI, tests |
+1. Get an API key at <https://app.gnani.ai/voice>.
+2. Copy the example settings file:
+   ```bash
+   cp .env.example .env
+   ```
+3. Open `.env` and set:
+   ```
+   VOICE_PROVIDER=gnani
+   GNANI_API_KEY=your-key-here
+   ```
+4. Test the key without starting the server:
+   ```bash
+   python scripts/gnani_check.py
+   ```
+   It speaks a sentence, saves `hello.wav`, then listens to it again.
+5. Start the app. The header should show **Voice: Gnani ON**.
 
-## 2-minute demo script
+> ⚠️ Never commit your `.env` file. It is already listed in `.gitignore`.
 
-0. **Queue story first:** *Queue* tab shows two demo hospitals. Civil Hospital Medicine OPD has 6 tokens left, District Hospital Medicine OPD is **FULL**. Press **Hear answer**. Then take a token with a phone number, press **Call next** a few times and **Skip 11 min** to get the "your number is near" call.
-1. Press **Load demo data** (dummy patients only).
-2. *Patients* tab → **Call now** on Amlodipine. The "Patient phone" panel shows the call; press **Hear latest call** (browser voice).
-3. Reply **Li + sugar 280**. Status turns *taken* and the reading gets a red flag.
-4. Call again, send no reply, press **Skip 11 min** twice (each press moves the demo clock 11 min ahead). 1st press = call retried, 2nd press = SMS to family appears.
-5. *Visit summary* tab → type or speak symptoms → scan QR → doctor page.
-6. Show `docker compose up`, CI badge, `/metrics`.
+### Run the tests
 
-## Gnani voice (real speech)
+```bash
+python -m pytest -q
+```
 
-The app uses Gnani's **Vachana** speech APIs (docs: https://docs.gnani.ai):
+## 2-Minute Demo
 
-- **Text-to-speech (Timbre v2.5):** the reminder / queue / availability text is spoken in Hindi, Punjabi or English.
-- **Speech-to-text (Prisma):** the patient's spoken reply (or a BP/sugar reading) becomes text, then the normal reminder logic runs.
+1. **Queue story:** open the **OPD queue** tab. Civil Hospital Medicine OPD has 6 tokens left. District Hospital Medicine OPD is **FULL**. Press **Hear answer**.
+2. Take a token with a phone number. Press **Call next** a few times, then **Skip 11 min**. The "your number is near" call appears in the Patient phone panel.
+3. Press **Load demo data** (dummy patients only).
+4. Open **Patients**, press **Call now** on Amlodipine, then **Hear latest call**.
+5. Reply **Li + sugar 280**. The status becomes *taken* and the reading gets a red flag.
+6. Call again and send no reply. Press **Skip 11 min** twice. The first press retries the call, the second sends an SMS to the family.
+7. Open **Visit summary**, type or speak symptoms, and scan the QR code to see the doctor page.
 
-Without a key the dashboard falls back to the browser's built-in voice, so the demo still works.
+## Project Structure
 
-1. Get an API key at https://app.gnani.ai/voice (new accounts get free credits, per Gnani's SDK page).
-2. Copy `.env.example` to `.env` and paste the key: `GNANI_API_KEY=your-key`. **Never commit `.env`.**
-3. Test the key (no server needed): `python scripts/gnani_check.py` (speaks a sentence, saves `hello.wav`, then transcribes it).
-4. Start the app. The header badge should say **Voice: Gnani ON**. Use **Hear latest call** and **Reply with voice**.
+```
+sehat-saathi/
+├── app/
+│   ├── main.py        # API routes
+│   ├── queue.py       # OPD queue and token logic
+│   ├── nlp.py         # understands replies, readings and symptoms
+│   ├── voice.py       # voice provider switch
+│   ├── gnani.py       # Gnani speech-to-text and text-to-speech
+│   ├── services.py    # reminder and alert logic
+│   ├── models.py      # database tables
+│   ├── seed.py        # dummy demo data
+│   └── static/        # dashboard (index.html)
+├── scripts/           # gnani_check.py
+├── tests/             # automated tests
+├── monitoring/        # Prometheus config
+├── Dockerfile
+└── docker-compose.yml
+```
 
-**What is still simulated:** the phone call itself. A real phone call needs a telephony provider (Gnani Agent Builder or Twilio). In this MVP the call text is saved and played as audio on the dashboard "phone".
+## Safety Rules
 
-## Safety rules (say these in the demo)
+- It **never diagnoses** and **never suggests or changes a dose**. It only reminds, records and flags.
+- A doctor or pharmacist must **confirm each medicine schedule** before reminders start.
+- The BP and sugar limits in `app/nlp.py` are placeholders. Each hospital must set its own.
+- Symptom detection is keyword based. The doctor always sees the patient's exact words.
+- The demo uses **dummy data only**. Real patient data needs consent, encryption and DPDP Act compliance.
 
-- Never diagnoses and never suggests or changes a dose. It reminds, records and flags.
-- A doctor/pharmacist must confirm each schedule before reminders start.
-- Flag limits in `app/nlp.py` (`check_reading`) are placeholders. A hospital sets its own.
-- Demo uses **dummy data only**. Real patient data needs consent, encryption and DPDP Act compliance.
-- Symptom detection is keyword-based; the doctor always sees the patient's exact words.
+## Current Limits (Honest Notes)
 
-## Roadmap after the MVP
+- **The phone call is simulated.** The call text is saved and played as audio on the dashboard "phone". A real call needs a telephony provider such as Gnani Agent Builder or Twilio.
+- **Queue data is demo data.** It is based on how a large hospital works, but it is not connected to a real hospital system.
 
-Prescription photo → schedule (OCR, doctor verifies), login and roles (doctor/nurse/chemist), multi-hospital tenants, WhatsApp channel, more languages, stock refill alerts to the nearest chemist, ABHA integration.
+## Roadmap
 
+- [ ] Family status page ("did the elder take the medicine today?")
+- [ ] Real phone calls through a telephony provider
+- [ ] Connect to a real hospital token system
+- [ ] Prescription photo to schedule (OCR, verified by a doctor)
+- [ ] Login and roles for doctor, nurse and chemist
+- [ ] WhatsApp channel and more languages
+- [ ] ABHA integration
 
 ## Troubleshooting
 
-- **Error mentioning a missing column after updating the code:** the demo database has an older layout. Stop the server, delete `sehat.db` (it only holds dummy data), start again.
-- Git Bash on Windows: activate the venv with `source venv/Scripts/activate`.
+| Problem | Fix |
+|---|---|
+| Error about a missing column after updating the code | The demo database has an old layout. Stop the server, delete `sehat.db` (it holds only dummy data), and start again. |
+| `venv` will not activate in Git Bash | Use `source venv/Scripts/activate` |
+| Header does not say "Voice: Gnani ON" | Check that `.env` has `VOICE_PROVIDER=gnani` and a valid `GNANI_API_KEY`, then restart the server. |
+
+## Author
+
+Built by **Anjali Mishra** for the Gnani.ai voice AI challenge.
